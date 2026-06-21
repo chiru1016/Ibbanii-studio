@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Florelle Studio | Handmade Pipe Cleaner Flowers</title>
+    <meta name="description"
+        content="Beautiful handmade pipe cleaner flowers that never fade. Discover our collection of roses, sunflowers, tulips, and lilies at The Florelle Studio.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Montserrat:wght@300;400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <header id="main-header">
+        <nav class="container">
+            <div class="logo">
+                <h1>THE FLORELLE STUDIO</h1>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#home">Home</a></li>
+                <li><a href="#collection">Collection</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="#contact" class="btn-primary">Order Now</a></li>
+            </ul>
+            <div class="menu-toggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section id="home" class="hero">
+            <div class="container hero-content">
+                <div class="hero-text animate-fade-in">
+                    <span class="badge">Handmade with Love</span>
+                    <h2>Flowers That <br><span class="accent">Never Fade</span></h2>
+                    <p>Experience the everlasting beauty of handcrafted pipe cleaner flowers. Perfect for gifts, home
+                        decor, and special moments that deserve to bloom forever.</p>
+                    <div class="hero-btns">
+                        <a href="#collection" class="btn-primary">View Collection</a>
+                        <a href="#about" class="btn-secondary">Our Story</a>
+                    </div>
+                </div>
+                <div class="hero-image animate-float">
+                    <img src="assets/roses.png" alt="Handmade Rose Bouquet">
+                    <div class="floating-card c1"><span>100% Homemade</span></div>
+                    <div class="floating-card c2"><span>Customizable</span></div>
+                </div>
+            </div>
+            <div class="hero-bg-shapes">
+                <div class="shape s1"></div>
+                <div class="shape s2"></div>
+            </div>
+        </section>
+
+        <section id="collection" class="collection">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Our Floral Collection</h2>
+                    <p>Each piece is meticulously crafted with high-quality pipe cleaners to ensure elegance and
+                        durability.</p>
+                </div>
+
+                <div class="filter-tabs">
+                    <button class="tab-btn active" data-filter="all">All Flowers</button>
+                    <button class="tab-btn" data-filter="rose">Roses</button>
+                    <button class="tab-btn" data-filter="sunflower">Sunflowers</button>
+                    <button class="tab-btn" data-filter="tulip">Tulips</button>
+                    <button class="tab-btn" data-filter="lily">Lilies</button>
+                </div>
+
+                <div class="product-grid" id="productGrid">
+                    <!-- Products will be injected by JavaScript -->
+                </div>
+            </div>
+        </section>
+
+        <section id="features" class="features">
+            <div class="container grid-3">
+                <div class="feature-card">
+                    <div class="icon">✨</div>
+                    <h3>100% Handmade</h3>
+                    <p>Every flower is uniquely crafted by hand with extreme attention to detail.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🎁</div>
+                    <h3>Perfect for Gifts</h3>
+                    <p>A thoughtful, long-lasting gift for birthdays, anniversaries, or just because.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🎨</div>
+                    <h3>Customizable</h3>
+                    <p>Want a specific color or arrangement? We take custom orders tailored to your heart's desire.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="contact" class="contact">
+            <div class="container">
+                <div class="contact-card">
+                    <div class="contact-info">
+                        <h2>Order Your Bouquet</h2>
+                        <p>Currently taking orders via Instagram DM. Click the button below to visit our studio and send
+                            us a message!</p>
+                        <div class="social-links">
+                            <a href="https://instagram.com/the_florelle.studio" target="_blank" class="instagram-link">
+                                <span class="icon">📸</span> @the_ibbanii.studio
+                            </a>
+                        </div>
+                    </div>
+                    <div class="contact-footer">
+                        <p>Thank you for supporting handmade! 💖</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-bottom">
+                <p>&copy; 2026 THE FLORELLE STUDIO. Crafted with passion.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
