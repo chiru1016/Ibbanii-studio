@@ -3,12 +3,24 @@ const User = require('../models/User');
 
 const auth = async (req, res, next) => {
   try {
-    const token = req.header('Authorization').replace('Bearer ', '');
+    const authHeader = req.header('Authorization');
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).send({ error: 'Please authenticate.' });
+    }
+
+    const token = authHeader.replace('Bearer ', '').trim();
+
+    if (!token) {
+      return res.status(401).send({ error: 'Please authenticate.' });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findOne({ _id: decoded.id });
+
+    const user = await User.findById(decoded.id);
 
     if (!user) {
-      throw new Error();
+      return res.status(401).send({ error: 'Please authenticate.' });
     }
 
     req.user = user;
@@ -20,10 +32,10 @@ const auth = async (req, res, next) => {
 
 const admin = (req, res, next) => {
   if (req.user && req.user.role === 'admin') {
-    next();
-  } else {
-    res.status(403).send({ error: 'Access denied. Admin only.' });
+    return next();
   }
+
+  res.status(403).send({ error: 'Access denied. Admin only.' });
 };
 
 module.exports = { auth, admin };

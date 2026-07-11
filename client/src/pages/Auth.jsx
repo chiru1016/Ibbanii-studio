@@ -39,7 +39,7 @@ const Auth = () => {
         };
 
     try {
-      const res = await axios.post(`http://localhost:5000${endpoint}`, payload);
+      const res = await axios.post(endpoint, payload);
       login(res.data.user, res.data.token);
       navigate('/');
     } catch (err) {

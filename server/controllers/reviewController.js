@@ -1,9 +1,13 @@
+const mongoose = require('mongoose');
 const Review = require('../models/Review');
-const Order  = require('../models/Order');
+const Order = require('../models/Order');
 
-// GET /api/products/:id/reviews — public
 const getReviews = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid product ID.' });
+    }
+
     const reviews = await Review.find({ productId: req.params.id })
       .populate('userId', 'name')
       .sort({ createdAt: -1 });
@@ -12,60 +16,91 @@ const getReviews = async (req, res) => {
       ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
       : 0;
 
-    res.json({ reviews, avgRating: parseFloat(avgRating.toFixed(1)), count: reviews.length });
+    res.json({
+      reviews,
+      avgRating: parseFloat(avgRating.toFixed(1)),
+      count: reviews.length,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-// POST /api/products/:id/reviews — auth required; must have purchased the product
 const addReview = async (req, res) => {
   try {
     const { rating, comment } = req.body;
     const productId = req.params.id;
-    const userId    = req.user._id;
+    const userId = req.user._id;
 
-    // Check if user has a non-cancelled order that contains this product
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ error: 'Invalid product ID.' });
+    }
+
+    const numericRating = Number(rating);
+
+    if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5.' });
+    }
+
+    if (comment && comment.length > 500) {
+      return res.status(400).json({ error: 'Comment cannot be more than 500 characters.' });
+    }
+
     const hasPurchased = await Order.findOne({
       userId,
-      orderStatus: { $nin: ['Cancelled'] },
+      paymentStatus: 'Paid',
+      orderStatus: { $ne: 'Cancelled' },
       'cartItems.productId': productId,
     });
 
     if (!hasPurchased) {
-      return res.status(403).json({ error: 'You can only review products you have purchased.' });
+      return res.status(403).json({ error: 'You can review only products you have paid for.' });
     }
 
-    // Upsert: if they already reviewed, update it
     const review = await Review.findOneAndUpdate(
       { userId, productId },
-      { rating, comment },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+      {
+        rating: numericRating,
+        comment: comment?.trim() || '',
+      },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+        runValidators: true,
+      }
     );
 
-    // Populate name for the response
     await review.populate('userId', 'name');
+
     res.status(201).json(review);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 };
 
-// DELETE /api/reviews/:reviewId — own review or admin
 const deleteReview = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.reviewId)) {
+      return res.status(400).json({ error: 'Invalid review ID.' });
+    }
+
     const review = await Review.findById(req.params.reviewId);
-    if (!review) return res.status(404).json({ error: 'Review not found' });
+
+    if (!review) {
+      return res.status(404).json({ error: 'Review not found.' });
+    }
 
     const isOwner = review.userId.toString() === req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
 
     if (!isOwner && !isAdmin) {
-      return res.status(403).json({ error: 'Not authorized to delete this review' });
+      return res.status(403).json({ error: 'Not authorized to delete this review.' });
     }
 
     await review.deleteOne();
-    res.json({ message: 'Review deleted' });
+
+    res.json({ message: 'Review deleted.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

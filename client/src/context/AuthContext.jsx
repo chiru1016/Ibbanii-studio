@@ -10,16 +10,17 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
       fetchProfile();
     } else {
+      delete axios.defaults.headers.common.Authorization;
       setLoading(false);
     }
   }, [token]);
 
   const fetchProfile = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/auth/profile');
+      const res = await axios.get('/api/auth/profile');
       setUser(res.data);
     } catch (error) {
       logout();
@@ -32,13 +33,14 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     setToken(userToken);
     localStorage.setItem('token', userToken);
+    axios.defaults.headers.common.Authorization = `Bearer ${userToken}`;
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
     localStorage.removeItem('token');
-    delete axios.defaults.headers.common['Authorization'];
+    delete axios.defaults.headers.common.Authorization;
   };
 
   return (
