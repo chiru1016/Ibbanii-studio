@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import api from '../api';
+import { getImageUrl } from '../utils/image';
 import { AuthContext } from '../context/AuthContext';
 import { Package, MapPin, Phone, Mail } from 'lucide-react';
-import { getImageUrl } from '../utils/image';
 
 const Profile = () => {
   const { user } = useContext(AuthContext);

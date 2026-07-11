@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../api';
+import { getImageUrl } from '../utils/image';
 import { ShoppingCart, ArrowLeft, ShieldCheck, Truck, RefreshCw, Heart, Trash2 } from 'lucide-react';
 import { CartContext } from '../context/CartContext';
 import { WishlistContext } from '../context/WishlistContext';
 import { AuthContext } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
-import { getImageUrl } from '../utils/image';
 
 const ProductDetails = () => {
   const { id } = useParams();

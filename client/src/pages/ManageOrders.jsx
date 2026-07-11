@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { getImageUrl } from '../utils/image';
 
 const ManageOrders = () => {
   const [orders, setOrders] = useState([]);
@@ -318,7 +317,7 @@ const ManageOrders = () => {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                           {item.image && (
                                             <img
-                                              src={getImageUrl(item.image)}
+                                              src={item.image}
                                               alt={item.name}
                                               style={{
                                                 width: '50px',

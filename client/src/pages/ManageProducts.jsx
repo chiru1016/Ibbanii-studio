@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { Trash2, Edit, X, Save } from 'lucide-react';
 import { getImageUrl } from '../utils/image';
+import { Trash2, Edit, X, Save } from 'lucide-react';
 
 const categories = ['Flowers', 'Dolls', 'Toys', 'Decor', 'Accessories'];
 

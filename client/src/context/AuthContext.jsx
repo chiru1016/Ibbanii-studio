@@ -10,10 +10,8 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (token) {
-      api.defaults.headers.common.Authorization = `Bearer ${token}`;
       fetchProfile();
     } else {
-      delete api.defaults.headers.common.Authorization;
       setLoading(false);
     }
   }, [token]);
@@ -33,14 +31,14 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     setToken(userToken);
     localStorage.setItem('token', userToken);
-    api.defaults.headers.common.Authorization = `Bearer ${userToken}`;
+    
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
     localStorage.removeItem('token');
-    delete api.defaults.headers.common.Authorization;
+    
   };
 
   return (
