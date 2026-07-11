@@ -17,12 +17,19 @@ const reviewRoutes = require('./routes/reviewRoutes');
 
 const app = express();
 
-const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:3000';
-
-app.use(helmet());
+const allowedOrigins = [
+  'http://localhost:3000',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
 
 app.use(cors({
-  origin: allowedOrigin,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 
