@@ -25,9 +25,9 @@ const register = async (req, res) => {
   } catch (error) {
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
-      return res.status(400).send({ error: `${field.charAt(0).toUpperCase() + field.slice(1)} already exists` });
+      return res.status(400).send({ error: `That ${field} is already registered. Try logging in.` });
     }
-    res.status(400).send({ error: error.message });
+    res.status(500).send({ error: 'Server error. Please try again in a moment.' });
   }
 };
 
@@ -47,7 +47,7 @@ const login = async (req, res) => {
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
     res.send({ user, token });
   } catch (error) {
-    res.status(400).send({ error: error.message });
+    res.status(500).send({ error: 'Server error. Please try again in a moment.' });
   }
 };
 

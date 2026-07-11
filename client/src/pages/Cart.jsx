@@ -2,6 +2,7 @@ import React, { useContext } from 'react';
 import { Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
 import { CartContext } from '../context/CartContext';
 import { Link } from 'react-router-dom';
+import { getImageUrl } from '../utils/image';
 
 const Cart = () => {
   const { cartItems, removeFromCart, updateQuantity, totalAmount } = useContext(CartContext);
@@ -25,7 +26,7 @@ const Cart = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {cartItems.map((item) => (
             <div key={item.productId} className="card" style={{ display: 'flex', padding: '15px', alignItems: 'center', gap: '20px' }}>
-              <img src={item.image.startsWith('http') ? item.image : `http://localhost:5000${item.image}`} alt={item.name} style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
+              <img src={getImageUrl(item.image)} alt={item.name} style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
               <div style={{ flex: 1 }}>
                 <h3 style={{ fontSize: '1.2rem' }}>{item.name}</h3>
                 <p style={{ color: 'var(--primary)', fontWeight: 600 }}>₹{item.price}</p>

@@ -5,6 +5,7 @@ import { CartContext } from '../context/CartContext';
 import { WishlistContext } from '../context/WishlistContext';
 import { AuthContext } from '../context/AuthContext';
 import StarRating from './StarRating';
+import { getImageUrl } from '../utils/image';
 import axios from 'axios';
 
 const ProductCard = ({ product }) => {
@@ -18,7 +19,7 @@ const ProductCard = ({ product }) => {
 
   useEffect(() => {
     // Fetch rating summary for this product
-    axios.get(`http://localhost:5000/api/products/${product._id}/reviews`)
+    axios.get(`/api/products/${product._id}/reviews`)
       .then(res => setRatingData({ avgRating: res.data.avgRating, count: res.data.count }))
       .catch(() => {}); // silently fail — not critical
   }, [product._id]);
@@ -66,7 +67,7 @@ const ProductCard = ({ product }) => {
       {/* Product image */}
       <Link to={`/products/${product._id}`}>
         <img
-          src={product.image.startsWith('http') ? product.image : `http://localhost:5000${product.image}`}
+          src={getImageUrl(product.image)}
           alt={product.name}
           style={{ width: '100%', height: '250px', objectFit: 'cover' }}
         />

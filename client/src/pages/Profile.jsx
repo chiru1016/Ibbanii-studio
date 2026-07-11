@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { Package, MapPin, Phone, Mail } from 'lucide-react';
+import { getImageUrl } from '../utils/image';
 
 const Profile = () => {
   const { user } = useContext(AuthContext);
