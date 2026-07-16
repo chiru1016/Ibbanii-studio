@@ -49,7 +49,7 @@ const Checkout = () => {
         key: order.keyId,
         amount: order.amount,
         currency: order.currency,
-        name: 'The Florelle Studio',
+        name: 'Ibbanii Studio',
         description: 'Order Payment',
         order_id: order.razorpayOrderId,
 

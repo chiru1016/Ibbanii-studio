@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const adminFirebase = require('../firebaseAdmin');
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -93,6 +94,7 @@ const register = async (req, res) => {
       email: email || undefined,
       phone: phone || undefined,
       password,
+      authProvider: 'password',
       role: 'customer',
     });
 
@@ -105,6 +107,8 @@ const register = async (req, res) => {
       token,
     });
   } catch (error) {
+    console.error('Register error:', error);
+
     if (error.code === 11000) {
       return res.status(400).send({
         error: 'Email or phone number is already registered.',
@@ -159,6 +163,12 @@ const login = async (req, res) => {
       });
     }
 
+    if (user.authProvider !== 'password' && !user.password) {
+      return res.status(400).send({
+        error: `This account uses ${user.authProvider} login. Please use that login method.`,
+      });
+    }
+
     const isPasswordMatch = await user.comparePassword(password);
 
     if (!isPasswordMatch) {
@@ -174,8 +184,85 @@ const login = async (req, res) => {
       token,
     });
   } catch (error) {
+    console.error('Login error:', error);
+
     res.status(500).send({
       error: 'Server error. Please try again.',
+    });
+  }
+};
+
+const firebaseLogin = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).send({
+        error: 'Firebase ID token is required.',
+      });
+    }
+
+    const decodedToken = await adminFirebase.auth().verifyIdToken(idToken);
+
+    const firebaseUid = decodedToken.uid;
+    const email = decodedToken.email?.toLowerCase();
+    const phone = decodedToken.phone_number
+      ? decodedToken.phone_number.replace('+91', '')
+      : undefined;
+
+    const name =
+      decodedToken.name ||
+      decodedToken.email?.split('@')[0] ||
+      decodedToken.phone_number ||
+      'Customer';
+
+    const signInProvider = decodedToken.firebase?.sign_in_provider;
+
+    const authProvider = signInProvider === 'phone' ? 'phone' : 'google';
+
+    let user = await User.findOne({
+      $or: [
+        { firebaseUid },
+        ...(email ? [{ email }] : []),
+        ...(phone ? [{ phone }] : []),
+      ],
+    });
+
+    if (!user) {
+      user = new User({
+        name,
+        email: email || undefined,
+        phone: phone || undefined,
+        firebaseUid,
+        authProvider,
+        emailVerified: !!decodedToken.email_verified,
+        phoneVerified: !!phone,
+        role: 'customer',
+      });
+
+      await user.save();
+    } else {
+      user.firebaseUid = user.firebaseUid || firebaseUid;
+      user.emailVerified = user.emailVerified || !!decodedToken.email_verified;
+      user.phoneVerified = user.phoneVerified || !!phone;
+
+      if (!user.email && email) user.email = email;
+      if (!user.phone && phone) user.phone = phone;
+
+      await user.save();
+    }
+
+    const token = makeToken(user);
+
+    res.send({
+      user: user.toSafeUser(),
+      token,
+    });
+  } catch (error) {
+    console.error('Firebase login error:', error);
+
+    res.status(401).send({
+      error: 'Firebase authentication failed. Please try again.',
     });
   }
 };
@@ -187,5 +274,6 @@ const getProfile = async (req, res) => {
 module.exports = {
   register,
   login,
+  firebaseLogin,
   getProfile,
 };

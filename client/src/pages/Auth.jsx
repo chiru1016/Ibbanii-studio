@@ -4,6 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { Eye, EyeOff, Mail, Phone, User, Lock } from 'lucide-react';
 
+import {
+  firebaseAuth,
+  googleProvider,
+  RecaptchaVerifier,
+  signInWithPopup,
+  signInWithPhoneNumber,
+} from '../firebase';
+
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const normalizePhone = (phone) => {
@@ -27,9 +35,7 @@ const isValidIndianPhone = (phone) => {
   return /^[6-9]\d{9}$/.test(cleaned);
 };
 
-const isEmail = (value) => {
-  return value.includes('@');
-};
+const isEmail = (value) => value.includes('@');
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -47,8 +53,21 @@ const Auth = () => {
   const [successInfo, setSuccessInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [otpPhone, setOtpPhone] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState(null);
+  const [otpLoading, setOtpLoading] = useState(false);
+
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  const goAfterLogin = (user) => {
+    if (user?.role === 'admin') {
+      navigate('/admin');
+    } else {
+      navigate('/');
+    }
+  };
 
   const handleInputChange = (e) => {
     setError('');
@@ -71,10 +90,8 @@ const Auth = () => {
       if (!emailRegex.test(identifier)) {
         return 'Please enter a valid email address.';
       }
-    } else {
-      if (!isValidIndianPhone(identifier)) {
-        return 'Please enter a valid 10-digit Indian phone number.';
-      }
+    } else if (!isValidIndianPhone(identifier)) {
+      return 'Please enter a valid 10-digit Indian phone number.';
     }
 
     if (!formData.password) {
@@ -165,12 +182,7 @@ const Auth = () => {
       const res = await api.post(endpoint, payload);
 
       login(res.data.user, res.data.token);
-
-      if (res.data.user?.role === 'admin') {
-        navigate('/admin');
-      } else {
-        navigate('/');
-      }
+      goAfterLogin(res.data.user);
     } catch (err) {
       console.error('Auth error:', err);
 
@@ -180,15 +192,137 @@ const Auth = () => {
             err.response.data?.message ||
             'Login failed. Please check your details.'
         );
-      } else if (err.request) {
-        setError(
-          'Cannot connect to server. Please check backend deployment and internet connection.'
-        );
       } else {
-        setError(err.message || 'Something went wrong. Please try again.');
+        setError('Unable to login right now. Please try again after a moment.');
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loginWithFirebaseToken = async (firebaseUser) => {
+    const idToken = await firebaseUser.getIdToken();
+
+    const res = await api.post('/api/auth/firebase-login', {
+      idToken,
+    });
+
+    login(res.data.user, res.data.token);
+    goAfterLogin(res.data.user);
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setError('');
+      setSuccessInfo('');
+      setLoading(true);
+
+      const result = await signInWithPopup(firebaseAuth, googleProvider);
+
+      await loginWithFirebaseToken(result.user);
+    } catch (err) {
+      console.error('Google login error:', err);
+
+      if (err.response) {
+        setError(
+          err.response.data?.error ||
+            err.response.data?.message ||
+            'Google login failed. Please try again.'
+        );
+      } else {
+        setError('Google login failed. Please try again after a moment.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetRecaptcha = () => {
+    if (window.recaptchaVerifier) {
+      try {
+        window.recaptchaVerifier.clear();
+      } catch (error) {
+        console.error('Recaptcha clear error:', error);
+      }
+
+      window.recaptchaVerifier = null;
+    }
+  };
+
+  const sendPhoneOtp = async () => {
+    try {
+      setError('');
+      setSuccessInfo('');
+      setOtpLoading(true);
+
+      const cleanedPhone = normalizePhone(otpPhone);
+
+      if (!isValidIndianPhone(cleanedPhone)) {
+        setError('Enter a valid 10-digit Indian phone number.');
+        return;
+      }
+
+      resetRecaptcha();
+
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        firebaseAuth,
+        'recaptcha-container',
+        {
+          size: 'invisible',
+        }
+      );
+
+      const confirmation = await signInWithPhoneNumber(
+        firebaseAuth,
+        `+91${cleanedPhone}`,
+        window.recaptchaVerifier
+      );
+
+      setConfirmationResult(confirmation);
+      setSuccessInfo('OTP sent successfully. Please check your phone.');
+    } catch (err) {
+      console.error('OTP send error:', err);
+
+      setError('Failed to send OTP. Please try again after a moment.');
+      resetRecaptcha();
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const verifyPhoneOtp = async () => {
+    try {
+      setError('');
+      setSuccessInfo('');
+      setOtpLoading(true);
+
+      if (!confirmationResult) {
+        setError('Please send OTP first.');
+        return;
+      }
+
+      if (!otpCode || otpCode.length < 6) {
+        setError('Enter valid 6-digit OTP.');
+        return;
+      }
+
+      const result = await confirmationResult.confirm(otpCode);
+
+      await loginWithFirebaseToken(result.user);
+    } catch (err) {
+      console.error('OTP verify error:', err);
+
+      if (err.response) {
+        setError(
+          err.response.data?.error ||
+            err.response.data?.message ||
+            'OTP verification failed. Please try again.'
+        );
+      } else {
+        setError('Invalid OTP. Please try again.');
+      }
+    } finally {
+      setOtpLoading(false);
     }
   };
 
@@ -197,6 +331,9 @@ const Auth = () => {
     setError('');
     setSuccessInfo('');
     setShowPassword(false);
+    setConfirmationResult(null);
+    setOtpPhone('');
+    setOtpCode('');
 
     setFormData({
       name: '',
@@ -205,18 +342,6 @@ const Auth = () => {
       password: '',
       identifier: '',
     });
-  };
-
-  const handleGoogleComingSoon = () => {
-    setError(
-      'Google login needs Google OAuth Client ID setup. We can add it after creating Google credentials.'
-    );
-  };
-
-  const handleOtpComingSoon = () => {
-    setError(
-      'Phone OTP verification needs Firebase, Twilio, or MSG91 setup. Current phone number is format-validated only.'
-    );
   };
 
   return (
@@ -234,7 +359,7 @@ const Auth = () => {
         className="card"
         style={{
           width: '100%',
-          maxWidth: '480px',
+          maxWidth: '500px',
           padding: '44px 40px',
         }}
       >
@@ -245,7 +370,7 @@ const Auth = () => {
 
           <p style={{ color: 'var(--text-light)', fontSize: '0.92rem' }}>
             {isLogin
-              ? 'Login using your email or phone number'
+              ? 'Login using password, Google, or phone OTP'
               : 'Register with email or phone number'}
           </p>
         </div>
@@ -262,6 +387,7 @@ const Auth = () => {
               display: 'flex',
               alignItems: 'flex-start',
               gap: '8px',
+              lineHeight: '1.6',
             }}
           >
             <span style={{ flexShrink: 0 }}>⚠️</span>
@@ -278,6 +404,7 @@ const Auth = () => {
               borderRadius: '10px',
               marginBottom: '22px',
               fontSize: '0.9rem',
+              lineHeight: '1.6',
             }}
           >
             {successInfo}
@@ -287,7 +414,13 @@ const Auth = () => {
         <form onSubmit={handleSubmit}>
           {!isLogin && (
             <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: 600,
+                }}
+              >
                 Full Name
               </label>
 
@@ -306,7 +439,7 @@ const Auth = () => {
                 <input
                   type="text"
                   name="name"
-                  required
+                  required={!isLogin}
                   placeholder="Enter your full name"
                   value={formData.name}
                   onChange={handleInputChange}
@@ -318,7 +451,13 @@ const Auth = () => {
 
           {isLogin ? (
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: 600,
+                }}
+              >
                 Email or Phone Number
               </label>
 
@@ -337,7 +476,7 @@ const Auth = () => {
                 <input
                   type="text"
                   name="identifier"
-                  required
+                  required={isLogin}
                   placeholder="Email or 10-digit phone number"
                   value={formData.identifier}
                   onChange={handleInputChange}
@@ -345,15 +484,17 @@ const Auth = () => {
                   style={{ paddingLeft: '44px' }}
                 />
               </div>
-
-              <p style={{ fontSize: '0.78rem', color: '#888', marginTop: '6px' }}>
-                Example: user@gmail.com or 9876543210
-              </p>
             </div>
           ) : (
             <>
               <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '8px',
+                    fontWeight: 600,
+                  }}
+                >
                   Email Address
                 </label>
 
@@ -382,7 +523,13 @@ const Auth = () => {
               </div>
 
               <div style={{ marginBottom: '8px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '8px',
+                    fontWeight: 600,
+                  }}
+                >
                   Phone Number
                 </label>
 
@@ -409,14 +556,26 @@ const Auth = () => {
                 </div>
               </div>
 
-              <p style={{ fontSize: '0.78rem', color: '#888', marginBottom: '18px' }}>
+              <p
+                style={{
+                  fontSize: '0.78rem',
+                  color: '#888',
+                  marginBottom: '18px',
+                }}
+              >
                 Enter at least one: email or phone number.
               </p>
             </>
           )}
 
           <div style={{ marginBottom: '26px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+            <label
+              style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontWeight: 600,
+              }}
+            >
               Password
             </label>
 
@@ -441,7 +600,10 @@ const Auth = () => {
                 onChange={handleInputChange}
                 autoComplete={isLogin ? 'current-password' : 'new-password'}
                 minLength={6}
-                style={{ paddingLeft: '44px', paddingRight: '48px' }}
+                style={{
+                  paddingLeft: '44px',
+                  paddingRight: '48px',
+                }}
               />
 
               <button
@@ -481,47 +643,116 @@ const Auth = () => {
           </button>
         </form>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '18px 0' }}>
-          <div style={{ flex: 1, height: '1px', background: '#eee' }} />
-          <span style={{ fontSize: '0.8rem', color: '#888' }}>or</span>
-          <div style={{ flex: 1, height: '1px', background: '#eee' }} />
-        </div>
+        {isLogin && (
+          <>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                margin: '18px 0',
+              }}
+            >
+              <div style={{ flex: 1, height: '1px', background: '#eee' }} />
+              <span style={{ fontSize: '0.8rem', color: '#888' }}>or</span>
+              <div style={{ flex: 1, height: '1px', background: '#eee' }} />
+            </div>
 
-        <button
-          type="button"
-          onClick={handleGoogleComingSoon}
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '30px',
+                border: '1px solid #ddd',
+                background: '#fff',
+                color: '#333',
+                marginBottom: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              disabled={loading}
+            >
+              Continue with Google
+            </button>
+
+            <div id="recaptcha-container"></div>
+
+            <div
+              style={{
+                border: '1px solid #eee',
+                borderRadius: '14px',
+                padding: '16px',
+                marginBottom: '20px',
+                background: '#fff',
+              }}
+            >
+              <p style={{ fontWeight: 700, marginBottom: '12px' }}>
+                Login with Phone OTP
+              </p>
+
+              <input
+                type="tel"
+                placeholder="Enter 10-digit phone number"
+                value={otpPhone}
+                onChange={(e) => {
+                  setError('');
+                  setSuccessInfo('');
+                  setOtpPhone(e.target.value);
+                }}
+                style={{ marginBottom: '10px' }}
+              />
+
+              <button
+                type="button"
+                onClick={sendPhoneOtp}
+                className="btn-secondary"
+                style={{
+                  width: '100%',
+                  marginBottom: '12px',
+                }}
+                disabled={otpLoading}
+              >
+                {otpLoading ? 'Please wait...' : 'Send OTP'}
+              </button>
+
+              {confirmationResult && (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Enter OTP"
+                    value={otpCode}
+                    onChange={(e) => {
+                      setError('');
+                      setSuccessInfo('');
+                      setOtpCode(e.target.value);
+                    }}
+                    style={{ marginBottom: '10px' }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={verifyPhoneOtp}
+                    className="btn-primary"
+                    style={{ width: '100%' }}
+                    disabled={otpLoading}
+                  >
+                    {otpLoading ? 'Verifying...' : 'Verify OTP & Login'}
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        <p
           style={{
-            width: '100%',
-            padding: '12px',
-            borderRadius: '30px',
-            border: '1px solid #ddd',
-            background: '#fff',
-            color: '#333',
-            marginBottom: '12px',
-            fontWeight: 600,
+            textAlign: 'center',
+            color: '#666',
+            fontSize: '0.9rem',
           }}
         >
-          Continue with Google
-        </button>
-
-        <button
-          type="button"
-          onClick={handleOtpComingSoon}
-          style={{
-            width: '100%',
-            padding: '12px',
-            borderRadius: '30px',
-            border: '1px solid #ddd',
-            background: '#fff',
-            color: '#333',
-            marginBottom: '20px',
-            fontWeight: 600,
-          }}
-        >
-          Verify with Phone OTP
-        </button>
-
-        <p style={{ textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
           {isLogin ? "Don't have an account? " : 'Already have an account? '}
 
           <button
@@ -552,9 +783,10 @@ const Auth = () => {
               color: 'var(--text-light)',
             }}
           >
-            <strong style={{ color: 'var(--primary-dark)' }}>Admin access?</strong>{' '}
-            Use your admin email and password on this same page. You will be redirected to
-            the Admin Dashboard automatically after login.
+            <strong style={{ color: 'var(--primary-dark)' }}>
+              Admin access?
+            </strong>{' '}
+            Use your admin email and password on this same page.
           </div>
         )}
       </div>

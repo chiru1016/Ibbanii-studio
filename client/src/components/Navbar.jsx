@@ -27,7 +27,7 @@ const Navbar = () => {
   return (
     <nav className="navbar">
       <Link to="/" className="navbar-logo" onClick={closeMenu}>
-        THE FLORELLE STUDIO
+        IBBANII STUDIO
       </Link>
 
       <button
