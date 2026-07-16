@@ -2,7 +2,34 @@ import React, { useState, useContext } from 'react';
 import api from '../api';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Mail, Phone, User, Lock } from 'lucide-react';
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const normalizePhone = (phone) => {
+  if (!phone) return '';
+
+  let cleaned = phone.replace(/\D/g, '');
+
+  if (cleaned.startsWith('91') && cleaned.length === 12) {
+    cleaned = cleaned.slice(2);
+  }
+
+  if (cleaned.startsWith('0') && cleaned.length === 11) {
+    cleaned = cleaned.slice(1);
+  }
+
+  return cleaned;
+};
+
+const isValidIndianPhone = (phone) => {
+  const cleaned = normalizePhone(phone);
+  return /^[6-9]\d{9}$/.test(cleaned);
+};
+
+const isEmail = (value) => {
+  return value.includes('@');
+};
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -17,37 +44,122 @@ const Auth = () => {
 
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [successInfo, setSuccessInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const handleInputChange = (e) => {
+    setError('');
+    setSuccessInfo('');
+
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
   };
 
+  const validateLogin = () => {
+    const identifier = formData.identifier.trim();
+
+    if (!identifier) {
+      return 'Please enter your email or phone number.';
+    }
+
+    if (isEmail(identifier)) {
+      if (!emailRegex.test(identifier)) {
+        return 'Please enter a valid email address.';
+      }
+    } else {
+      if (!isValidIndianPhone(identifier)) {
+        return 'Please enter a valid 10-digit Indian phone number.';
+      }
+    }
+
+    if (!formData.password) {
+      return 'Please enter your password.';
+    }
+
+    if (formData.password.length < 6) {
+      return 'Password must be at least 6 characters.';
+    }
+
+    return null;
+  };
+
+  const validateRegister = () => {
+    const name = formData.name.trim();
+    const email = formData.email.trim();
+    const phone = formData.phone.trim();
+
+    if (!name || name.length < 2) {
+      return 'Please enter your full name.';
+    }
+
+    if (!email && !phone) {
+      return 'Please enter either email or phone number.';
+    }
+
+    if (email && !emailRegex.test(email)) {
+      return 'Please enter a valid email address.';
+    }
+
+    if (phone && !isValidIndianPhone(phone)) {
+      return 'Please enter a valid 10-digit Indian phone number.';
+    }
+
+    if (!formData.password) {
+      return 'Please create a password.';
+    }
+
+    if (formData.password.length < 6) {
+      return 'Password must be at least 6 characters.';
+    }
+
+    return null;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     setError('');
+    setSuccessInfo('');
+
+    const validationError = isLogin ? validateLogin() : validateRegister();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
 
     const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
 
-    const payload = isLogin
-      ? {
-          identifier: formData.identifier.trim(),
-          password: formData.password,
-        }
-      : {
-          name: formData.name.trim(),
-          email: formData.email.trim() || undefined,
-          phone: formData.phone.trim() || undefined,
-          password: formData.password,
-        };
+    let payload;
+
+    if (isLogin) {
+      const identifier = formData.identifier.trim();
+
+      payload = {
+        identifier: isEmail(identifier)
+          ? identifier.toLowerCase()
+          : normalizePhone(identifier),
+        password: formData.password,
+      };
+    } else {
+      payload = {
+        name: formData.name.trim(),
+        email: formData.email.trim()
+          ? formData.email.trim().toLowerCase()
+          : undefined,
+        phone: formData.phone.trim()
+          ? normalizePhone(formData.phone.trim())
+          : undefined,
+        password: formData.password,
+      };
+    }
 
     try {
       const res = await api.post(endpoint, payload);
@@ -60,17 +172,17 @@ const Auth = () => {
         navigate('/');
       }
     } catch (err) {
-      console.error('Login/Register error:', err);
+      console.error('Auth error:', err);
 
       if (err.response) {
         setError(
           err.response.data?.error ||
-          err.response.data?.message ||
-          'Login failed. Please check your details.'
+            err.response.data?.message ||
+            'Login failed. Please check your details.'
         );
       } else if (err.request) {
         setError(
-          'Cannot connect to backend server. Check Render backend, VITE_API_URL, and CORS FRONTEND_URL.'
+          'Cannot connect to server. Please check backend deployment and internet connection.'
         );
       } else {
         setError(err.message || 'Something went wrong. Please try again.');
@@ -83,6 +195,9 @@ const Auth = () => {
   const switchMode = () => {
     setIsLogin(!isLogin);
     setError('');
+    setSuccessInfo('');
+    setShowPassword(false);
+
     setFormData({
       name: '',
       email: '',
@@ -90,7 +205,18 @@ const Auth = () => {
       password: '',
       identifier: '',
     });
-    setShowPassword(false);
+  };
+
+  const handleGoogleComingSoon = () => {
+    setError(
+      'Google login needs Google OAuth Client ID setup. We can add it after creating Google credentials.'
+    );
+  };
+
+  const handleOtpComingSoon = () => {
+    setError(
+      'Phone OTP verification needs Firebase, Twilio, or MSG91 setup. Current phone number is format-validated only.'
+    );
   };
 
   return (
@@ -101,25 +227,26 @@ const Auth = () => {
         justifyContent: 'center',
         alignItems: 'center',
         padding: '60px 20px',
+        minHeight: 'calc(100vh - 120px)',
       }}
     >
       <div
         className="card"
         style={{
           width: '100%',
-          maxWidth: '460px',
+          maxWidth: '480px',
           padding: '44px 40px',
         }}
       >
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h2 style={{ fontSize: '1.8rem', marginBottom: '8px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <h2 style={{ fontSize: '1.9rem', marginBottom: '8px' }}>
             {isLogin ? 'Welcome Back' : 'Create Account'}
           </h2>
 
-          <p style={{ color: 'var(--text-light)', fontSize: '0.9rem' }}>
+          <p style={{ color: 'var(--text-light)', fontSize: '0.92rem' }}>
             {isLogin
-              ? 'Sign in to your Florelle Studio account'
-              : 'Join The Florelle Studio family'}
+              ? 'Login using your email or phone number'
+              : 'Register with email or phone number'}
           </p>
         </div>
 
@@ -137,136 +264,184 @@ const Auth = () => {
               gap: '8px',
             }}
           >
-            <span style={{ flexShrink: 0, marginTop: '1px' }}>⚠️</span>
+            <span style={{ flexShrink: 0 }}>⚠️</span>
             <span>{error}</span>
           </div>
         )}
 
+        {successInfo && (
+          <div
+            style={{
+              backgroundColor: '#dcfce7',
+              color: '#166534',
+              padding: '12px 16px',
+              borderRadius: '10px',
+              marginBottom: '22px',
+              fontSize: '0.9rem',
+            }}
+          >
+            {successInfo}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
-          {isLogin ? (
-            <div style={{ marginBottom: '20px' }}>
-              <label
-                style={{
-                  display: 'block',
-                  marginBottom: '8px',
-                  fontWeight: 500,
-                }}
-              >
-                Email or Phone Number
+          {!isLogin && (
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+                Full Name
               </label>
 
-              <input
-                type="text"
-                name="identifier"
-                required
-                placeholder="Enter your email or phone"
-                value={formData.identifier}
-                onChange={handleInputChange}
-                autoComplete="username"
-              />
-            </div>
-          ) : (
-            <>
-              <div style={{ marginBottom: '18px' }}>
-                <label
+              <div style={{ position: 'relative' }}>
+                <User
+                  size={18}
                   style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontWeight: 500,
+                    position: 'absolute',
+                    left: '14px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#999',
                   }}
-                >
-                  Full Name
-                </label>
+                />
 
                 <input
                   type="text"
                   name="name"
                   required
-                  placeholder="Your full name"
+                  placeholder="Enter your full name"
                   value={formData.name}
                   onChange={handleInputChange}
+                  style={{ paddingLeft: '44px' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {isLogin ? (
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+                Email or Phone Number
+              </label>
+
+              <div style={{ position: 'relative' }}>
+                <Mail
+                  size={18}
+                  style={{
+                    position: 'absolute',
+                    left: '14px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#999',
+                  }}
+                />
+
+                <input
+                  type="text"
+                  name="identifier"
+                  required
+                  placeholder="Email or 10-digit phone number"
+                  value={formData.identifier}
+                  onChange={handleInputChange}
+                  autoComplete="username"
+                  style={{ paddingLeft: '44px' }}
                 />
               </div>
 
+              <p style={{ fontSize: '0.78rem', color: '#888', marginTop: '6px' }}>
+                Example: user@gmail.com or 9876543210
+              </p>
+            </div>
+          ) : (
+            <>
               <div style={{ marginBottom: '18px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontWeight: 500,
-                  }}
-                >
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
                   Email Address
                 </label>
 
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="your@email.com"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  autoComplete="email"
-                />
+                <div style={{ position: 'relative' }}>
+                  <Mail
+                    size={18}
+                    style={{
+                      position: 'absolute',
+                      left: '14px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#999',
+                    }}
+                  />
+
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="your@email.com"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    autoComplete="email"
+                    style={{ paddingLeft: '44px' }}
+                  />
+                </div>
               </div>
 
-              <div style={{ marginBottom: '6px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontWeight: 500,
-                  }}
-                >
+              <div style={{ marginBottom: '8px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
                   Phone Number
                 </label>
 
-                <input
-                  type="tel"
-                  name="phone"
-                  placeholder="10-digit mobile number"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                />
+                <div style={{ position: 'relative' }}>
+                  <Phone
+                    size={18}
+                    style={{
+                      position: 'absolute',
+                      left: '14px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#999',
+                    }}
+                  />
+
+                  <input
+                    type="tel"
+                    name="phone"
+                    placeholder="10-digit mobile number"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    style={{ paddingLeft: '44px' }}
+                  />
+                </div>
               </div>
 
-              <p
-                style={{
-                  fontSize: '0.8rem',
-                  color: '#888',
-                  marginBottom: '18px',
-                }}
-              >
-                * At least one of email or phone is required.
+              <p style={{ fontSize: '0.78rem', color: '#888', marginBottom: '18px' }}>
+                Enter at least one: email or phone number.
               </p>
             </>
           )}
 
-          <div style={{ marginBottom: '28px' }}>
-            <label
-              style={{
-                display: 'block',
-                marginBottom: '8px',
-                fontWeight: 500,
-              }}
-            >
+          <div style={{ marginBottom: '26px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
               Password
             </label>
 
             <div style={{ position: 'relative' }}>
+              <Lock
+                size={18}
+                style={{
+                  position: 'absolute',
+                  left: '14px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#999',
+                }}
+              />
+
               <input
                 type={showPassword ? 'text' : 'password'}
                 name="password"
                 required
-                placeholder={
-                  isLogin
-                    ? 'Enter your password'
-                    : 'Create a password, minimum 6 characters'
-                }
+                placeholder={isLogin ? 'Enter password' : 'Minimum 6 characters'}
                 value={formData.password}
                 onChange={handleInputChange}
                 autoComplete={isLogin ? 'current-password' : 'new-password'}
-                minLength={isLogin ? undefined : 6}
-                style={{ paddingRight: '48px' }}
+                minLength={6}
+                style={{ paddingLeft: '44px', paddingRight: '48px' }}
               />
 
               <button
@@ -285,8 +460,6 @@ const Auth = () => {
                   display: 'flex',
                   alignItems: 'center',
                 }}
-                title={showPassword ? 'Hide password' : 'Show password'}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -300,7 +473,7 @@ const Auth = () => {
               width: '100%',
               padding: '14px',
               fontSize: '1rem',
-              marginBottom: '20px',
+              marginBottom: '18px',
             }}
             disabled={loading}
           >
@@ -308,16 +481,51 @@ const Auth = () => {
           </button>
         </form>
 
-        <p
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '18px 0' }}>
+          <div style={{ flex: 1, height: '1px', background: '#eee' }} />
+          <span style={{ fontSize: '0.8rem', color: '#888' }}>or</span>
+          <div style={{ flex: 1, height: '1px', background: '#eee' }} />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGoogleComingSoon}
           style={{
-            textAlign: 'center',
-            color: '#666',
-            fontSize: '0.9rem',
+            width: '100%',
+            padding: '12px',
+            borderRadius: '30px',
+            border: '1px solid #ddd',
+            background: '#fff',
+            color: '#333',
+            marginBottom: '12px',
+            fontWeight: 600,
           }}
         >
+          Continue with Google
+        </button>
+
+        <button
+          type="button"
+          onClick={handleOtpComingSoon}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: '30px',
+            border: '1px solid #ddd',
+            background: '#fff',
+            color: '#333',
+            marginBottom: '20px',
+            fontWeight: 600,
+          }}
+        >
+          Verify with Phone OTP
+        </button>
+
+        <p style={{ textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
           {isLogin ? "Don't have an account? " : 'Already have an account? '}
 
           <button
+            type="button"
             onClick={switchMode}
             style={{
               background: 'none',
@@ -344,11 +552,9 @@ const Auth = () => {
               color: 'var(--text-light)',
             }}
           >
-            <strong style={{ color: 'var(--primary-dark)' }}>
-              Admin access?
-            </strong>{' '}
-            Use your admin email and password on this same page. You will be
-            redirected to the Admin Dashboard automatically after login.
+            <strong style={{ color: 'var(--primary-dark)' }}>Admin access?</strong>{' '}
+            Use your admin email and password on this same page. You will be redirected to
+            the Admin Dashboard automatically after login.
           </div>
         )}
       </div>
