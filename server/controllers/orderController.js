@@ -5,12 +5,21 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const { sendOrderNotification } = require('../utils/email');
 
+const DELIVERY_CHARGE = 100;
+
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-const validOrderStatuses = ['Pending', 'Paid', 'Packed', 'Shipped', 'Delivered', 'Cancelled'];
+const validOrderStatuses = [
+  'Pending',
+  'Paid',
+  'Packed',
+  'Shipped',
+  'Delivered',
+  'Cancelled',
+];
 
 const normalizeCartItems = (cartItems) => {
   if (!Array.isArray(cartItems) || cartItems.length === 0) {
@@ -49,10 +58,12 @@ const buildSecureOrderItems = async (cartItems) => {
     throw new Error('Some products in your cart are invalid.');
   }
 
-  const productMap = new Map(products.map((product) => [product._id.toString(), product]));
+  const productMap = new Map(
+    products.map((product) => [product._id.toString(), product])
+  );
 
   const secureItems = [];
-  let totalAmount = 0;
+  let productTotal = 0;
 
   for (const item of normalizedItems) {
     const product = productMap.get(item.productId.toString());
@@ -68,35 +79,47 @@ const buildSecureOrderItems = async (cartItems) => {
     const secureItem = {
       productId: product._id,
       name: product.name,
-      price: product.price,
+      price: Number(product.price),
       quantity: item.quantity,
       image: product.image,
     };
 
     secureItems.push(secureItem);
-    totalAmount += product.price * item.quantity;
+    productTotal += Number(product.price) * item.quantity;
   }
 
-  return { secureItems, totalAmount };
+  return {
+    secureItems,
+    productTotal,
+  };
 };
 
 const createRazorpayOrder = async (req, res) => {
   try {
-    const { cartItems, address } = req.body;
+    const { cartItems, address, shippingAddress } = req.body;
 
     if (!address || address.trim().length < 10) {
-      return res.status(400).send({ error: 'Please enter a complete delivery address.' });
+      return res.status(400).send({
+        error: 'Please enter a complete delivery address.',
+      });
     }
 
     if (!req.user.email && !req.user.phone) {
-      return res.status(400).send({ error: 'Your profile must have email or phone number.' });
+      return res.status(400).send({
+        error: 'Your profile must have email or phone number.',
+      });
     }
 
     if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      return res.status(500).send({ error: 'Razorpay keys are missing in server .env file.' });
+      return res.status(500).send({
+        error: 'Razorpay keys are missing in server .env file.',
+      });
     }
 
-    const { secureItems, totalAmount } = await buildSecureOrderItems(cartItems);
+    const { secureItems, productTotal } = await buildSecureOrderItems(cartItems);
+
+    const deliveryCharge = DELIVERY_CHARGE;
+    const totalAmount = productTotal + deliveryCharge;
 
     const pendingOrder = await Order.create({
       userId: req.user._id,
@@ -104,8 +127,15 @@ const createRazorpayOrder = async (req, res) => {
       email: req.user.email,
       phone: req.user.phone,
       address: address.trim(),
+
+      shippingAddress: shippingAddress || undefined,
+
       cartItems: secureItems,
+
+      productTotal,
+      deliveryCharge,
       totalAmount,
+
       paymentStatus: 'Pending',
       orderStatus: 'Pending',
     });
@@ -117,6 +147,9 @@ const createRazorpayOrder = async (req, res) => {
       notes: {
         appOrderId: pendingOrder._id.toString(),
         userId: req.user._id.toString(),
+        productTotal: productTotal.toString(),
+        deliveryCharge: deliveryCharge.toString(),
+        totalAmount: totalAmount.toString(),
       },
     });
 
@@ -125,18 +158,25 @@ const createRazorpayOrder = async (req, res) => {
 
     res.json({
       appOrderId: pendingOrder._id,
+      order: pendingOrder,
       razorpayOrderId: razorpayOrder.id,
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
       keyId: process.env.RAZORPAY_KEY_ID,
+      productTotal,
+      deliveryCharge,
+      totalAmount,
     });
   } catch (error) {
-    res.status(400).send({ error: error.message });
+    console.error('Create Razorpay order error:', error);
+    res.status(400).send({
+      error: error.message,
+    });
   }
 };
 
 const verifyPayment = async (req, res) => {
-  const session = await mongoose.startSession();
+  let session;
 
   try {
     const {
@@ -147,11 +187,15 @@ const verifyPayment = async (req, res) => {
     } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(appOrderId)) {
-      return res.status(400).send({ error: 'Invalid app order ID.' });
+      return res.status(400).send({
+        error: 'Invalid app order ID.',
+      });
     }
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).send({ error: 'Missing Razorpay payment details.' });
+      return res.status(400).send({
+        error: 'Missing Razorpay payment details.',
+      });
     }
 
     const sign = `${razorpay_order_id}|${razorpay_payment_id}`;
@@ -166,8 +210,12 @@ const verifyPayment = async (req, res) => {
         paymentStatus: 'Failed',
       });
 
-      return res.status(400).send({ error: 'Invalid payment signature.' });
+      return res.status(400).send({
+        error: 'Invalid payment signature.',
+      });
     }
+
+    session = await mongoose.startSession();
 
     let paidOrder;
 
@@ -213,10 +261,9 @@ const verifyPayment = async (req, res) => {
       order.razorpayPaymentId = razorpay_payment_id;
 
       await order.save({ session });
+
       paidOrder = order;
     });
-
-    session.endSession();
 
     if (paidOrder && paidOrder.paymentStatus === 'Paid') {
       await sendOrderNotification(paidOrder);
@@ -227,23 +274,42 @@ const verifyPayment = async (req, res) => {
       order: paidOrder,
     });
   } catch (error) {
-    session.endSession();
-    res.status(400).send({ error: error.message });
+    console.error('Verify payment error:', error);
+
+    res.status(400).send({
+      error: error.message,
+    });
+  } finally {
+    if (session) {
+      session.endSession();
+    }
   }
 };
 
 const getUserOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ userId: req.user._id }).sort({ createdAt: -1 });
+    const orders = await Order.find({
+      userId: req.user._id,
+    }).sort({
+      createdAt: -1,
+    });
+
     res.send(orders);
   } catch (error) {
-    res.status(500).send({ error: error.message });
+    console.error('Get user orders error:', error);
+
+    res.status(500).send({
+      error: error.message,
+    });
   }
 };
+
 const getOrderById = async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).send({ error: 'Invalid order ID.' });
+      return res.status(400).send({
+        error: 'Invalid order ID.',
+      });
     }
 
     const query = {
@@ -260,23 +326,36 @@ const getOrderById = async (req, res) => {
     );
 
     if (!order) {
-      return res.status(404).send({ error: 'Order not found.' });
+      return res.status(404).send({
+        error: 'Order not found.',
+      });
     }
 
     res.send(order);
   } catch (error) {
-    res.status(500).send({ error: error.message });
+    console.error('Get order by ID error:', error);
+
+    res.status(500).send({
+      error: error.message,
+    });
   }
 };
+
 const getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find()
       .populate('userId', 'name email phone role')
-      .sort({ createdAt: -1 });
+      .sort({
+        createdAt: -1,
+      });
 
     res.send(orders);
   } catch (error) {
-    res.status(500).send({ error: error.message });
+    console.error('Get all orders error:', error);
+
+    res.status(500).send({
+      error: error.message,
+    });
   }
 };
 
@@ -285,16 +364,22 @@ const updateOrderStatus = async (req, res) => {
     const { orderStatus } = req.body;
 
     if (!validOrderStatuses.includes(orderStatus)) {
-      return res.status(400).send({ error: 'Invalid order status.' });
+      return res.status(400).send({
+        error: 'Invalid order status.',
+      });
     }
 
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).send({ error: 'Invalid order ID.' });
+      return res.status(400).send({
+        error: 'Invalid order ID.',
+      });
     }
 
     const order = await Order.findByIdAndUpdate(
       req.params.id,
-      { orderStatus },
+      {
+        orderStatus,
+      },
       {
         new: true,
         runValidators: true,
@@ -302,12 +387,18 @@ const updateOrderStatus = async (req, res) => {
     );
 
     if (!order) {
-      return res.status(404).send({ error: 'Order not found.' });
+      return res.status(404).send({
+        error: 'Order not found.',
+      });
     }
 
     res.send(order);
   } catch (error) {
-    res.status(400).send({ error: error.message });
+    console.error('Update order status error:', error);
+
+    res.status(400).send({
+      error: error.message,
+    });
   }
 };
 

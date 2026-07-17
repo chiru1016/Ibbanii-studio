@@ -26,7 +26,7 @@ const Checkout = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const deliveryCharge = totalAmount > 999 ? 0 : 50;
+  const deliveryCharge = 100;
   const payableAmount = Number(totalAmount || 0) + deliveryCharge;
 
   const handleChange = (e) => {
