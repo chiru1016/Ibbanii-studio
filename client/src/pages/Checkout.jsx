@@ -55,15 +55,19 @@ const Checkout = () => {
 
         handler: async (response) => {
           try {
-            await api.post('/api/orders/verify', {
-              appOrderId: order.appOrderId,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
+            const verifyRes = await api.post('/api/orders/verify', {
+            appOrderId: order.appOrderId,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          });
 
-            clearCart();
-            navigate('/payment-status?status=success');
+          clearCart();
+          localStorage.removeItem('cart');
+
+          const paidOrderId = verifyRes.data?.order?._id || order.appOrderId;
+
+          navigate(`/orders/${paidOrderId}`, { replace: true });
           } catch (err) {
             console.error(err);
             alert(err.response?.data?.error || 'Payment verification failed.');

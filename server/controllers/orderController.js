@@ -240,7 +240,34 @@ const getUserOrders = async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 };
+const getOrderById = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).send({ error: 'Invalid order ID.' });
+    }
 
+    const query = {
+      _id: req.params.id,
+    };
+
+    if (req.user.role !== 'admin') {
+      query.userId = req.user._id;
+    }
+
+    const order = await Order.findOne(query).populate(
+      'userId',
+      'name email phone role'
+    );
+
+    if (!order) {
+      return res.status(404).send({ error: 'Order not found.' });
+    }
+
+    res.send(order);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+};
 const getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find()
@@ -288,6 +315,7 @@ module.exports = {
   createRazorpayOrder,
   verifyPayment,
   getUserOrders,
+  getOrderById,
   getAllOrders,
   updateOrderStatus,
 };

@@ -1,6 +1,14 @@
 import React, { useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, User, LogOut, Heart, Menu, X } from 'lucide-react';
+import {
+  ShoppingCart,
+  User,
+  LogOut,
+  Heart,
+  Menu,
+  X,
+  Package,
+} from 'lucide-react';
 
 import { AuthContext } from '../context/AuthContext';
 import { CartContext } from '../context/CartContext';
@@ -13,7 +21,12 @@ const Navbar = () => {
 
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const cartCount = (cartItems || []).reduce(
+    (acc, item) => acc + Number(item.quantity || 0),
+    0
+  );
+
+  const wishlistCount = wishlistItems?.length || 0;
 
   const closeMenu = () => {
     setMenuOpen(false);
@@ -31,6 +44,7 @@ const Navbar = () => {
       </Link>
 
       <button
+        type="button"
         className="navbar-menu-btn"
         onClick={() => setMenuOpen(!menuOpen)}
         aria-label="Toggle menu"
@@ -50,39 +64,60 @@ const Navbar = () => {
         )}
 
         {user && (
-          <Link to="/wishlist" className="navbar-icon-link" onClick={closeMenu}>
-            <Heart size={24} />
-            <span>Wishlist</span>
+          <>
+            <Link
+              to="/orders"
+              className="navbar-icon-link"
+              onClick={closeMenu}
+            >
+              <Package size={24} />
+              <span>Orders</span>
+            </Link>
 
-            {wishlistItems.length > 0 && (
-              <small className="nav-count">{wishlistItems.length}</small>
-            )}
-          </Link>
+            <Link
+              to="/wishlist"
+              className="navbar-icon-link"
+              onClick={closeMenu}
+            >
+              <Heart size={24} />
+              <span>Wishlist</span>
+
+              {wishlistCount > 0 && (
+                <small className="nav-count">{wishlistCount}</small>
+              )}
+            </Link>
+          </>
         )}
 
         <Link to="/cart" className="navbar-icon-link" onClick={closeMenu}>
           <ShoppingCart size={24} />
           <span>Cart</span>
 
-          {cartCount > 0 && (
-            <small className="nav-count">{cartCount}</small>
-          )}
+          {cartCount > 0 && <small className="nav-count">{cartCount}</small>}
         </Link>
 
         {user ? (
           <>
-            <Link to="/profile" className="navbar-icon-link" onClick={closeMenu}>
+            <Link
+              to="/profile"
+              className="navbar-icon-link"
+              onClick={closeMenu}
+            >
               <User size={24} />
               <span>Profile</span>
             </Link>
 
-            <button className="logout-btn" onClick={handleLogout}>
+            <button type="button" className="logout-btn" onClick={handleLogout}>
               <LogOut size={24} />
               <span>Logout</span>
             </button>
           </>
         ) : (
-          <Link to="/auth" className="btn-primary nav-login-btn" onClick={closeMenu}>
+          <Link
+            to="/auth"
+            className="btn-primary nav-login-btn"
+            onClick={closeMenu}
+          >
             Login
           </Link>
         )}

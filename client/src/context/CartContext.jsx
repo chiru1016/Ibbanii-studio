@@ -6,9 +6,7 @@ const getStoredCart = () => {
   try {
     const storedCart = localStorage.getItem('cart');
 
-    if (!storedCart) {
-      return [];
-    }
+    if (!storedCart) return [];
 
     const parsedCart = JSON.parse(storedCart);
 
@@ -19,7 +17,6 @@ const getStoredCart = () => {
 
     return parsedCart;
   } catch (error) {
-    console.error('Invalid cart data found. Clearing cart.', error);
     localStorage.removeItem('cart');
     return [];
   }
@@ -43,10 +40,7 @@ export const CartProvider = ({ children }) => {
       if (itemExists) {
         return prevItems.map((item) =>
           item.productId === product._id
-            ? {
-                ...item,
-                quantity: item.quantity + 1,
-              }
+            ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
@@ -75,18 +69,14 @@ export const CartProvider = ({ children }) => {
 
     setCartItems((prevItems) =>
       prevItems.map((item) =>
-        item.productId === productId
-          ? {
-              ...item,
-              quantity,
-            }
-          : item
+        item.productId === productId ? { ...item, quantity } : item
       )
     );
   };
 
   const clearCart = () => {
     setCartItems([]);
+    localStorage.removeItem('cart');
   };
 
   const totalAmount = cartItems.reduce(
