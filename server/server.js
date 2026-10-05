@@ -16,62 +16,92 @@ const wishlistRoutes = require('./routes/wishlistRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 
 const app = express();
+
 app.set('trust proxy', 1);
 
 const allowedOrigins = [
   'http://localhost:3000',
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+  'http://localhost:5173',
+  'https://ibbanii-studio.vercel.app',
+  'https://ibbanii-studio-7ms87n2iq-chiru1.vercel.app'
+];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true
+  })
+);
 
 app.use(express.json({ limit: '10kb' }));
+
 app.use(mongoSanitize());
+
+app.use(helmet());
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
-  message: { error: 'Too many requests. Please try again later.' },
+  message: {
+    error: 'Too many requests. Please try again later.'
+  }
 });
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
-  message: { error: 'Too many login/register attempts. Please try again later.' },
+  message: {
+    error: 'Too many login/register attempts. Please try again later.'
+  }
 });
 
 const paymentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 60,
-  message: { error: 'Too many payment/order requests. Please try again later.' },
+  message: {
+    error: 'Too many payment/order requests. Please try again later.'
+  }
 });
 
 app.use(generalLimiter);
 
 app.use('/api/auth', authLimiter, authRoutes);
+
 app.use('/api/products', productRoutes);
+
 app.use('/api/products/:id/reviews', reviewRoutes);
+
 app.use('/api/orders', paymentLimiter, orderRoutes);
+
 app.use('/api/config', configRoutes);
+
 app.use('/api/wishlist', wishlistRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Ibbanii Studio API is running'
+  });
 });
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('Connected to MongoDB'))
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok'
+  });
+});
+
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log('Connected to MongoDB');
+  })
   .catch((err) => {
     console.error('MongoDB connection error:', err.message);
     process.exit(1);
